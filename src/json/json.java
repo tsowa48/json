@@ -1,5 +1,7 @@
 package json;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -81,6 +83,59 @@ public class json extends Object {
     return new SimpleEntry<>(subValue, currentPosition);
   }
   
+  private static SimpleEntry<String, Object> parseClass(Object obj) {
+    try {
+      String key = "";
+      Object value = null;
+      ArrayList<SimpleEntry<String, Object>> tempValue = new ArrayList<>();
+      Class userClass = obj.getClass();
+      Field[] fields = userClass.getDeclaredFields();
+      for(int i = 0; i < fields.length; ++i) {
+        Field field = fields[i];
+        field.setAccessible(true);
+        String subKey = field.getName();
+        if(subKey.startsWith("this$"))
+          continue;
+        Object subValue = field.get(obj);
+        if(subValue instanceof Object[])
+          subValue = parseArrayClass(subValue);
+        else if(!isSimpleClass(subValue))
+          subValue = parseClass(subValue);
+        tempValue.add(new SimpleEntry<>(subKey, subValue));
+      };
+      value = tempValue;
+      return new SimpleEntry<>(key, value);
+    } catch(IllegalAccessException iae) {
+      return null;
+    }
+  }
+  
+  private static Object[] parseArrayClass(Object obj) {
+    if(isSimpleArray(obj))
+      return (Object[])obj;
+    Object[] objArray = (Object[])obj;
+    ArrayList<Object> subValue = new ArrayList<>();
+    for(int i = 0; i < objArray.length; ++i)
+      subValue.add(parseClass(objArray[i]));
+    return subValue.toArray();
+  }
+  
+  private static boolean isSimpleClass(Object obj) {
+    return obj instanceof String ||
+           obj instanceof Integer ||
+           obj instanceof Boolean ||
+           obj instanceof Double ||
+           obj == null;
+  }
+  
+  private static boolean isSimpleArray(Object obj) {
+    return obj instanceof String[] ||
+           obj instanceof Integer[] ||
+           obj instanceof Boolean[] ||
+           obj instanceof Double[];
+    //TODO: List
+  }
+  
   private static String jsonToString(SimpleEntry<String, Object> jsonPart) {
     StringBuilder sb = new StringBuilder();
     String key = jsonPart.getKey();
@@ -133,9 +188,12 @@ public class json extends Object {
       return "\"" + value.toString() + "\"";
     }
   }
-  
-  public json(String jsonString) {
-    entry = parse(jsonString);
+
+  public json(Object obj) {
+    if(obj instanceof String)
+      entry = parse((String)obj);
+    else
+      entry = parseClass(obj);
   }
   
   public Object get(String key) {
@@ -150,5 +208,26 @@ public class json extends Object {
   @Override
   public String toString() {
     return jsonToString(entry);
+  }
+  
+  public Object toObject(Object instance) {
+    try {
+      Object ret = instance;
+      Field[] fields = instance.getClass().getDeclaredFields();
+      for(int i = 0; i < fields.length; ++i) {
+        Field field = fields[i];
+        boolean isAccessible = field.isAccessible();
+        field.setAccessible(true);
+        String key = field.getName();
+        Object value = this.get(key);
+        if(!isSimpleClass(value))
+          value = toObject(value.getClass());
+        field.set(ret, value);
+        field.setAccessible(isAccessible);
+      }
+      return ret;
+    } catch(Exception ex) {
+      return null;
+    }
   }
 }
