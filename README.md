@@ -8,8 +8,10 @@ Example:
 
 ```java
 json jsonInstance = new json("SOME_JSON_DATA"); // Create new instance and parse
-Object returnedObject = jsonInstance.get("KEY"); // Get data by KEY
+json returnedObject = jsonInstance.get("KEY"); // Get json data by KEY
+Object value = returnedObject.getValue();// Get simple json value (null, boolean, int, double, string, array[])
 String stringJsonRepresentation = jsonInstance.toString(); // Convert json to String
+MyClass myClass = returnedObject.toClass(MyClass.class);// Convert json to MyClass (create new instance inside)
 ```
 
 [ico-build-size]: https://img.shields.io/github/size/tsowa48/json/dist/json.jar
