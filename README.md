@@ -1,6 +1,7 @@
 # json
 __Simple JSON parser__
 
+![json.jar][ico-build]
 ![json.jar][ico-build-size]
 [![json.jar][ico-download]](https://github.com/tsowa48/json/raw/master/dist/json.jar)
 
@@ -14,5 +15,6 @@ String stringJsonRepresentation = jsonInstance.toString(); // Convert json to St
 MyClass myClass = returnedObject.toClass(MyClass.class);// Convert json to MyClass (create new instance inside)
 ```
 
+[ico-build]: https://travis-ci.com/tsowa48/json.svg?branch=master
 [ico-build-size]: https://img.shields.io/github/size/tsowa48/json/dist/json.jar
 [ico-download]: https://img.shields.io/badge/download-json.jar-success
