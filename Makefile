@@ -1,2 +1,2 @@
 all:
-	javac -sourcepath src src\json\json.java
+	javac -sourcepath src src/json/json.java
