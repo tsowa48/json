@@ -1,122 +1,206 @@
 package json;
 
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
-import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  *
  * @author tsowa
- * 
  */
 public class json extends Object {
-  private String key;
-  private Object value;
-  
-  private Object parse(String jsonString) {
-    String part = jsonString.trim();
-    ArrayList<json> tempValue = new ArrayList<>();
-    Integer currentPosition = 0;
-    while(part.charAt(currentPosition) != '}') {
-      String subPart = part.substring(currentPosition);
-      Integer startKeyIndex = subPart.indexOf("\"") + 1;
-      Integer endKeyIndex = subPart.indexOf("\"", startKeyIndex);
-      String subKey = subPart.substring(startKeyIndex, endKeyIndex);
-      currentPosition += (endKeyIndex + 2);
-      subPart = subPart.substring(endKeyIndex + 2).trim();
-      SimpleEntry<Object, Integer> subParse = parseSubValue(subPart);
-      currentPosition += subParse.getValue();
-      tempValue.add(new json(subKey, subParse.getKey()));
+  private static class Entry<V> {
+    private String key;
+    private V value;
+    
+    public Entry(V value) {
+      key = "";
+      this.value = value;
     }
-    return tempValue;
+    
+    @Override
+    public String toString() {
+      return ((key == null || key.isEmpty()) ? "" : "\"" + key + "\":") + valueToString(value);
+    }
+    
+    private static String valueToString(Object value) {
+      if(value == null)
+        return "null";
+      else if(value instanceof String)
+        return "\"" + value + "\"";
+      else if(value instanceof Boolean)
+        return (Boolean)value ? "true" : "false";
+      else if(value instanceof Object[]) {
+        Object[] arrValue = ((Object[])value);
+        return "[" + Arrays.stream(arrValue).map(it -> valueToString(it)).collect(Collectors.joining(",")) + "]";
+      } else
+        return value.toString();
+    }
   }
-
-  private SimpleEntry<Object, Integer> parseSubValue(String subPart) {
-    Object subValue;
-    Integer currentPosition = 0;
-    if(subPart.startsWith("{")) {
-      subValue = parse(subPart.substring(1));
-      currentPosition = (subPart.indexOf("}") + 2);
-    } else if(subPart.startsWith("[")) {
-      ArrayList<Object> subValueArray = new ArrayList<>();
-      currentPosition = subPart.length();
-      subPart = subPart.substring(1).trim();
-      currentPosition -= subPart.length();
-      while(!(subPart.startsWith(",") || subPart.startsWith("}"))) {
-        SimpleEntry<Object, Integer> subParse = parseSubValue(subPart);
-        subValueArray.add(subParse.getKey());
-        Integer subPosition = subParse.getValue();
-        if(!subPart.startsWith("{"))
-          subPosition += 1;
-        subPart = subPart.substring(subPosition);
-        currentPosition += subPosition;
+  
+  private List<Entry> entry;
+  private String _in;
+  
+  public json(Object obj) {
+    if(obj instanceof String) {
+      _in = (String)obj;
+      entry = stringToJson();
+    } else if(obj instanceof json) {
+      entry = ((json)obj).entry;
+    } else {
+      entry = parseClass(obj);
+    }
+  }
+  
+  private json() { }
+  
+  private json(List<Entry> e) {
+    entry = e;
+  }
+  
+  public <O> O get(String key) {
+    Object value = entry.stream().filter(it -> it.key.equals(key)).findFirst().get().value;
+    return (O)value;
+  }
+  
+  @Override
+  public String toString() {
+    return "{" + entry.stream().map(it -> it.toString()).collect(Collectors.joining(",")) + "}";
+  }
+  
+  private List<Entry> stringToJson() {
+    List<Entry> ret = new ArrayList<>();
+    _in = _in.substring(1).trim();
+    while(!(_in.startsWith("}") || _in.length() < 1)) {
+      int startKeyIndex = _in.indexOf("\"") + 1;
+      int endKeyIndex = _in.indexOf("\"", startKeyIndex);
+      final String key = _in.substring(startKeyIndex, endKeyIndex);
+      _in = _in.substring(endKeyIndex + 1).trim();//remove "
+      _in = _in.substring(1).trim();//remove :
+      Entry e = new Entry(parseValue());
+      e.key = key;
+      ret.add(e);
+    }
+    if(_in.length() > 0)
+      _in = _in.substring(1).trim();
+    if(_in.startsWith(","))
+      _in = _in.substring(1).trim();
+    return ret;
+  }
+  
+  private Object parseValue() {
+    Object ret;
+    if(_in.startsWith("\"")) {// String
+      _in = _in.substring(1);//remove "
+      String subPart = _in.substring(0, _in.indexOf("\""));
+      _in = _in.substring(_in.indexOf("\"") + 2).trim();
+      ret = subPart;
+    } else if(_in.startsWith("[")) {
+      _in = _in.substring(1).trim();//remove [
+      List<Object> subRet = new ArrayList<>();
+      while(!(_in.startsWith("}") || _in.startsWith(",") || _in.startsWith("]"))) {
+        subRet.add(parseValue());
       }
-      subValue = subValueArray.toArray();
-    } else if(subPart.startsWith("\"")) {//String (without quotes)
-      Integer startStringValueIndex = 1;
-      Integer endStringValueIndex = subPart.indexOf("\"", startStringValueIndex);
-      subValue = subPart.substring(startStringValueIndex, endStringValueIndex);
-      currentPosition = endStringValueIndex + 1;
-    } else {//double, integer, bool, null
-      Integer quoteIndex = subPart.indexOf(",");
-      Integer square1Index = subPart.indexOf("}");
-      Integer square2Index = subPart.indexOf("]");
-      quoteIndex = quoteIndex < 0 ? Integer.MAX_VALUE : quoteIndex;
-      square1Index = square1Index < 0 ? Integer.MAX_VALUE : square1Index;
-      square2Index = square2Index < 0 ? Integer.MAX_VALUE : square2Index;
-      Integer endIndex = Math.min(quoteIndex, Math.min(square1Index, square2Index));
-      String notString = subPart.substring(0, endIndex).toLowerCase();
-      if(notString.contains("."))
-        subValue = Double.valueOf(notString);
-      else if("null".equals(notString))
-        subValue = null;
-      else if("true".equals(notString))
-        subValue = Boolean.TRUE;
-      else if("false".equals(notString))
-        subValue = Boolean.FALSE;
+      _in = _in.substring(1).trim();
+      if(subRet.get(0) instanceof json)
+        ret = subRet.stream().map(it -> (json)it).toArray(json[]::new);
       else
-        subValue = Integer.valueOf(notString);
-      currentPosition = endIndex;
+        ret = subRet.toArray();
+    } else if(_in.startsWith("{")) {
+      json J = new json();
+      J.entry = stringToJson();
+      ret = J;
+    } else if(_in.startsWith("null")) {
+      ret = null;
+      _in = _in.substring(5);
+    } else if(_in.startsWith("true") || _in.startsWith("false")) {
+      ret = _in.startsWith("true");
+      _in = _in.substring(_in.startsWith("true") ? 5 : 6);
+    } else {
+      int pos1 = _in.indexOf(",");
+      int pos2 = _in.indexOf("]");
+      int pos3 = _in.indexOf("}");
+      pos1 = pos1 > 0 ? pos1 : Integer.MAX_VALUE;
+      pos2 = pos2 > 0 ? pos2 : Integer.MAX_VALUE;
+      pos3 = pos3 > 0 ? pos3 : Integer.MAX_VALUE;
+      String subPart = _in.substring(0, Math.min(pos1, Math.min(pos3, pos2))).trim();
+      _in = _in.substring(subPart.length()).trim();
+      if(_in.startsWith(","))
+        _in = _in.substring(1).trim();
+      if(subPart.contains("."))
+        ret = Double.valueOf(subPart);
+      else
+        ret = Integer.valueOf(subPart);
     }
-    return new SimpleEntry<>(subValue, currentPosition);
+    return ret;
   }
   
-  private static json parseClass(Object obj) {
+  public <T> T toClass(Class<T> clazz) {
+    return toClass(clazz, entry);
+  }
+  
+  private static <T> T toClass(Class<T> clazz, List<Entry> e) {
     try {
-      String key = "";
-      Object value = null;
-      ArrayList<json> tempValue = new ArrayList<>();
-      Class userClass = obj.getClass();
-      Field[] fields = userClass.getDeclaredFields();
+      T instance = clazz.newInstance();
+      Field[] fields = instance.getClass().getDeclaredFields();
       for(int i = 0; i < fields.length; ++i) {
         Field field = fields[i];
+        boolean isAccessible = field.isAccessible();
         field.setAccessible(true);
-        String subKey = field.getName();
-        if(subKey.startsWith("this$"))
-          continue;
-        Object subValue = field.get(obj);
-        if(subValue instanceof Object[])
-          subValue = parseArrayClass(subValue);
-        else if(!isSimpleClass(subValue))
-          subValue = parseClass(subValue);
-        tempValue.add(new json(subKey, subValue));
-      };
-      value = tempValue;
-      return new json(key, value);
-    } catch(IllegalAccessException iae) {
+        String key = field.getName();
+        Class cls = field.getType();
+        Object value = e.stream().filter(it -> it.key.equals(key)).findFirst().get().value;
+        if(!isSimpleClass(value))
+          value = toClass(cls, (List<Entry>)value);
+        field.set(instance, value);
+        field.setAccessible(isAccessible);
+      }
+      return instance;
+    } catch(Exception ex) {
+      ex.printStackTrace();
       return null;
     }
   }
   
-  private static Object[] parseArrayClass(Object obj) {
+  private List<Entry> parseClass(Object obj) {//TODO: fix
+    List<Entry> ret = new ArrayList<>();
+    try {
+      Class userClass = obj.getClass();
+      Field[] fields = userClass.getDeclaredFields();
+      for(int i = 0; i < fields.length; ++i) {
+        Field field = fields[i];
+        boolean isAccessible = field.isAccessible();
+        field.setAccessible(true);
+        String key = field.getName();
+        if(key.startsWith("this$"))
+          continue;
+        Object value = field.get(obj);
+        if(value instanceof Object[])
+          value = parseArrayClass(value);
+        else if(!isSimpleClass(value))
+          value = parseClass(value);
+        field.setAccessible(isAccessible);
+        Entry e = new Entry(value);
+        e.key = key;
+        ret.add(e);
+      }
+    } catch(IllegalAccessException iae) {
+      iae.printStackTrace();
+    }
+    return ret;
+  }
+  
+  private Object[] parseArrayClass(Object obj) {//TODO: fix
     if(isSimpleArray(obj))
       return (Object[])obj;
     Object[] objArray = (Object[])obj;
     ArrayList<Object> subValue = new ArrayList<>();
-    for(int i = 0; i < objArray.length; ++i)
-      subValue.add(parseClass(objArray[i]));
+    for(int i = 0; i < objArray.length; ++i) {
+      List<Entry> jsonEntry = parseClass(objArray[i]);
+      subValue.add(new json(jsonEntry));
+    }
     return subValue.toArray();
   }
   
@@ -134,105 +218,5 @@ public class json extends Object {
            obj instanceof Boolean[] ||
            obj instanceof Double[];
     //TODO: List
-  }
-  
-  private static String jsonToString(json jsonPart) {
-    StringBuilder sb = new StringBuilder();
-    if(!jsonPart.key.isEmpty()) {
-      sb.append("\"");
-      sb.append(jsonPart.key);
-      sb.append("\":");
-    }
-    sb.append(valueToString(jsonPart.value));
-    return sb.toString();
-  }
-  
-  private static String valueToString(Object value) {
-    if(value instanceof json) {
-      return jsonToString((json)value);
-    } else if(value instanceof Integer) {
-      return String.valueOf((Integer)value);
-    } else if(value instanceof Double) {
-      return String.valueOf((Double)value);
-    } else if(value instanceof Boolean) {
-      return value.toString();
-    } else if(value instanceof ArrayList) {
-      ArrayList<json> subValue = (ArrayList)value;
-      StringBuilder subBuilder = new StringBuilder();
-      subBuilder.append("{");
-      subValue.forEach(element -> {
-        subBuilder.append(jsonToString(element));
-        subBuilder.append(",");
-      });
-      subBuilder.deleteCharAt(subBuilder.lastIndexOf(","));
-      subBuilder.append("}");
-      return subBuilder.toString();
-    } else if(value instanceof Object[]) {
-      StringBuilder subBuilder = new StringBuilder("[");
-      Arrays.asList((Object[])value).forEach(element -> {
-        subBuilder.append(valueToString(element));
-        subBuilder.append(",");
-      });
-      subBuilder.deleteCharAt(subBuilder.lastIndexOf(","));
-      subBuilder.append("]");
-      return subBuilder.toString();
-    } else if(value == null) {
-      return "null";
-    } else {
-      return "\"" + value.toString() + "\"";
-    }
-  }
-
-  public json(Object obj) {
-    key = "";
-    if(obj instanceof String)
-      value = parse((String)obj);
-    else if(obj instanceof json) {
-      json _this = (json)obj;
-      key = _this.key;
-      value = _this.value;
-    } else
-      value = parseClass(obj);
-  }
-  
-  private json(String key, Object value) {
-    this.key = key;
-    this.value = value;
-  }
-  
-  public json get(String key) {
-    ArrayList<json> entry = (ArrayList)value;
-    json ret = entry.stream().filter(e -> e.key.equals(key)).findFirst().get();
-    return ret;
-  }
-  
-  public Object getValue() {
-    return value;
-  }
-
-  @Override
-  public String toString() {
-    return jsonToString(this);
-  }
-  
-  public <T> T toClass(Class<T> clazz) {
-    try {
-      T instance = clazz.newInstance();
-      Field[] fields = instance.getClass().getDeclaredFields();
-      for(int i = 0; i < fields.length; ++i) {
-        Field field = fields[i];
-        boolean isAccessible = field.isAccessible();
-        field.setAccessible(true);
-        String key = field.getName();
-        Object value = this.get(key).getValue();
-        if(!isSimpleClass(value))
-          value = toClass(value.getClass());
-        field.set(instance, value);
-        field.setAccessible(isAccessible);
-      }
-      return instance;
-    } catch(Exception ex) {
-      return null;
-    }
   }
 }

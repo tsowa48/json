@@ -8,11 +8,10 @@ __Simple JSON parser__
 Example:
 
 ```java
-json jsonInstance = new json("SOME_JSON_DATA"); // Create new instance and parse
-json returnedObject = jsonInstance.get("KEY"); // Get json data by KEY
-Object value = returnedObject.getValue();// Get simple json value (null, boolean, int, double, string, array[])
+json jsonInstance = new json("{ \"jsonKey\":{ \"stringKey\": \"stringValue\"}}"); // Create new instance and parse
+String returnedObject = jsonInstance.<json>get("jsonKey").<String>get("stringKey"); // Get data (etc String)
 String stringJsonRepresentation = jsonInstance.toString(); // Convert json to String
-MyClass myClass = returnedObject.toClass(MyClass.class);// Convert json to MyClass (create new instance inside)
+MyClass myClass = returnedObject.toClass(MyClass.class); // Convert json to MyClass (with subClasses init)
 ```
 
 [ico-build]: https://travis-ci.com/tsowa48/json.svg?branch=master
