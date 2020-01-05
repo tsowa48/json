@@ -11,7 +11,7 @@ Example:
 json jsonInstance = new json("{ \"jsonKey\":{ \"stringKey\": \"stringValue\"}}"); // Create new instance and parse
 String returnedObject = jsonInstance.<json>get("jsonKey").<String>get("stringKey"); // Get data (etc String)
 String stringJsonRepresentation = jsonInstance.toString(); // Convert json to String
-MyClass myClass = returnedObject.toClass(MyClass.class); // Convert json to MyClass (with subClasses init)
+MyClass myClass = jsonInstance.toClass(MyClass.class); // Convert json to MyClass (with subClasses init)
 ```
 
 [ico-build]: https://travis-ci.com/tsowa48/json.svg?branch=master
