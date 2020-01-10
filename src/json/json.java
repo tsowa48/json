@@ -104,7 +104,7 @@ public class json extends Object {
         subRet.add(parseValue());
       }
       _in = _in.substring(1).trim();
-      if(subRet.get(0) instanceof json)
+      if(!subRet.isEmpty() && subRet.get(0) instanceof json)
         ret = subRet.stream().map(it -> (json)it).toArray(json[]::new);
       else
         ret = subRet.toArray();
@@ -114,10 +114,10 @@ public class json extends Object {
       ret = J;
     } else if(_in.startsWith("null")) {
       ret = null;
-      _in = _in.substring(5);
+      _in = _in.substring(4);
     } else if(_in.startsWith("true") || _in.startsWith("false")) {
       ret = _in.startsWith("true");
-      _in = _in.substring(_in.startsWith("true") ? 5 : 6);
+      _in = _in.substring(_in.startsWith("true") ? 4 : 5);
     } else {
       int pos1 = _in.indexOf(",");
       int pos2 = _in.indexOf("]");
@@ -151,7 +151,8 @@ public class json extends Object {
         field.setAccessible(true);
         String key = field.getName();
         Class cls = field.getType();
-        Object value = e.stream().filter(it -> it.key.equals(key)).findFirst().get().value;
+        Entry subEntry = e.stream().filter(it -> it.key.equals(key)).findFirst().orElse(null);
+        Object value = subEntry == null ? null : subEntry.value;
         if(!isSimpleClass(value))
           value = toClass(cls, (List<Entry>)value);
         field.set(instance, value);
