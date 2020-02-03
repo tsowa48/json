@@ -1,9 +1,15 @@
 package json;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -153,7 +159,28 @@ public class json extends Object {
         Class cls = field.getType();
         Entry subEntry = e.stream().filter(it -> it.key.equals(key)).findFirst().orElse(null);
         Object value = subEntry == null ? null : subEntry.value;
-        if(!isSimpleClass(value))
+        if(value instanceof Object[] || value instanceof Set) {
+          Set<Object> arrValue = new HashSet<>();
+          Object[] tmpValue = (value instanceof Set) ? ((Set<Object>)value).toArray() : (Object[])value;
+          if(tmpValue.length == 0)
+            value = null;
+          else {
+            Class subClass = cls;
+            Type subType = field.getGenericType();
+            if(subType instanceof ParameterizedType)
+              subClass = (Class)((ParameterizedType)subType).getActualTypeArguments()[0];
+//System.err.println("\njson:tmpValue[0]=" + tmpValue[0].getClass().getName());//DEBUG
+            for(int index = 0; index < tmpValue.length; ++index) {
+              Object subValue = toClass(subClass, ((json)tmpValue[index]).entry);//tmpValue[0].getClass(), (List<Entry>)
+              arrValue.add(subValue);
+            }
+            value = (subType instanceof ParameterizedType) ? arrValue : arrValue.toArray();
+          }
+        } else if(cls.isEnum()) {
+          value = cls.getEnumConstants()[(Integer)value];
+        } else if(cls == Date.class) {
+          value = new SimpleDateFormat("dd.MM.yyyy").parse((String)value);
+        } else if(!isSimpleClass(value))
           value = toClass(cls, (List<Entry>)value);
         field.set(instance, value);
         field.setAccessible(isAccessible);
@@ -178,10 +205,10 @@ public class json extends Object {
         if(key.startsWith("this$"))
           continue;
         Object value = field.get(obj);
-        if(value instanceof Object[])
+        if(value instanceof Object[] || value instanceof Set)
           value = parseArrayClass(value);
         else if(!isSimpleClass(value))
-          value = parseClass(value);
+          value = new json(value);
         field.setAccessible(isAccessible);
         Entry e = new Entry(value);
         e.key = key;
@@ -193,7 +220,9 @@ public class json extends Object {
     return ret;
   }
   
-  private Object[] parseArrayClass(Object obj) {//TODO: fix
+  private Object[] parseArrayClass(Object obj) {
+    if(obj instanceof Set)
+      obj = ((Set)obj).toArray();
     if(isSimpleArray(obj))
       return (Object[])obj;
     Object[] objArray = (Object[])obj;
@@ -208,6 +237,7 @@ public class json extends Object {
   private static boolean isSimpleClass(Object obj) {
     return obj instanceof String ||
            obj instanceof Integer ||
+           obj instanceof Long ||
            obj instanceof Boolean ||
            obj instanceof Double ||
            obj == null;
@@ -216,8 +246,8 @@ public class json extends Object {
   private static boolean isSimpleArray(Object obj) {
     return obj instanceof String[] ||
            obj instanceof Integer[] ||
+           obj instanceof Long[] ||
            obj instanceof Boolean[] ||
            obj instanceof Double[];
-    //TODO: List
   }
 }
